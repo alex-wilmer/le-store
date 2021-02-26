@@ -1,0 +1,13 @@
+
+{
+  "private": true,
+  "name": "stripe-test",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "Alex Wilmer <djazium@gmail.com>",
+  "license": "MIT",
+  "workspaces": [
+    "api",
+    "ui"
+  ]
+}
