@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-let api = 'http://localhost:5555'
+let api = '/.netlify/functions'
 let get = endpoint => fetch(api + endpoint).then(r => r.json())
 
 function App() {
