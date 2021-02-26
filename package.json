@@ -1,7 +1,7 @@
 
 {
   "private": true,
-  "name": "stripe-test",
+  "name": "le-store",
   "version": "1.0.0",
   "main": "index.js",
   "author": "Alex Wilmer <djazium@gmail.com>",
