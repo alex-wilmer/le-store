@@ -5,7 +5,7 @@ import {
   CardNumberElement,
   CardExpiryElement,
   CardCvcElement,
-  PaymentRequestButtonElement,
+  // PaymentRequestButtonElement,
 } from '@stripe/react-stripe-js'
 import { Box, Heading, Button, Input, Text, Spinner, useToast } from "@chakra-ui/react"
 
@@ -75,6 +75,8 @@ function App() {
         paymentMethodId: paymentMethod.id,
         priceId: selectedPriceId
       })
+
+      console.log({ subscriptionData })
 
       setLoading(false)
 
