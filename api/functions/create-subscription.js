@@ -1,7 +1,7 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET);
 
 exports.handler = async function (event, context) {
-  const data = JSON.parse(context.body)
+  const data = JSON.parse(event.body)
 
   try {
     await stripe.paymentMethods.attach(data.paymentMethodId, {

@@ -178,7 +178,7 @@ function App() {
           }}
         >
           <div style={{ paddingRight: 20 }}>
-            <Text mb="8px">Expiry Date (MM/YY)</Text>
+            <Text mb="8px">Expiry Date</Text>
             <div className="card-input">
               <CardExpiryElement />
             </div>

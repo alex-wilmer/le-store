@@ -1,10 +1,10 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET);
 
 exports.handler = async function (event, context) {
-  const data = JSON.parse(context.body)
+  const { email } = JSON.parse(event.body)
 
   const customer = await stripe.customers.create({
-    email: data.email
+    email
   })
 
   return {
