@@ -5,7 +5,7 @@ import {
   CardNumberElement,
   CardExpiryElement,
   CardCvcElement,
-  // PaymentRequestButtonElement,
+  PaymentRequestButtonElement,
 } from '@stripe/react-stripe-js'
 import { Box, Heading, Button, Input, Text, Spinner, useToast } from "@chakra-ui/react"
 import { get, post } from './api'
@@ -21,6 +21,42 @@ function App() {
   const elements = useElements()
   const toast = useToast()
 
+  const [paymentRequest, setPaymentRequest] = useState(null);
+
+  useEffect(() => {
+    if (stripe) {
+      const pr = stripe.paymentRequest({
+        country: 'US',
+        currency: 'usd',
+        total: {
+          label: 'Demo total',
+          amount: 1350,
+        },
+        requestPayerName: true,
+        requestPayerEmail: true,
+        requestShipping: true,
+        shippingOptions: [
+          {
+            id: 'standard-global',
+            label: 'Global shipping',
+            detail: 'Arrives in 5 to 7 days',
+            amount: 350,
+          },
+        ],
+      });
+
+      // Check the availability of the Payment Request API first.
+      pr.canMakePayment().then((result) => {
+        if (result) {
+          pr.on('paymentmethod', () => {
+            //
+          });
+          setPaymentRequest(pr);
+        }
+      });
+    }
+  }, [stripe])
+
   useEffect(() => {
     Promise.all([get('/products'), get('/prices')])
       .then(([products, prices]) => {
@@ -30,6 +66,83 @@ function App() {
       })
   }, [])
 
+  function handlePaymentThatRequiresCustomerAction({
+    subscription,
+    invoice,
+    priceId,
+    paymentMethodId,
+    isRetry,
+  }) {
+    if (subscription && subscription.status === 'active') {
+      // Subscription is active, no customer actions required.
+      return { subscription, priceId, paymentMethodId };
+    }
+
+    // If it's a first payment attempt, the payment intent is on the subscription latest invoice.
+    // If it's a retry, the payment intent will be on the invoice itself.
+    let paymentIntent = invoice ? invoice.payment_intent : subscription.latest_invoice.payment_intent;
+
+    if (
+      paymentIntent.status === 'requires_action' ||
+      (isRetry === true && paymentIntent.status === 'requires_payment_method')
+    ) {
+      return stripe
+        .confirmCardPayment(paymentIntent.client_secret, {
+          payment_method: paymentMethodId,
+        })
+        .then((result) => {
+          if (result.error) {
+            // Start code flow to handle updating the payment details.
+            // Display error message in your UI.
+            // The card was declined (i.e. insufficient funds, card has expired, etc).
+            throw result;
+          } else {
+            if (result.paymentIntent.status === 'succeeded') {
+              // Show a success message to your customer.
+              return {
+                priceId: priceId,
+                subscription: subscription,
+                invoice: invoice,
+                paymentMethodId: paymentMethodId,
+              };
+            }
+          }
+        })
+        .catch((error) => {
+          // displayError(error);
+        });
+    } else {
+      // No customer action needed.
+      return { subscription, priceId, paymentMethodId };
+    }
+  }
+
+  function handleRequiresPaymentMethod({
+    subscription,
+    paymentMethodId,
+    priceId,
+  }) {
+    if (subscription.status === 'active') {
+      // subscription is active, no customer actions required.
+      return { subscription, priceId, paymentMethodId };
+    } else if (
+      subscription.latest_invoice.payment_intent.status ===
+      'requires_payment_method'
+    ) {
+      // Using localStorage to manage the state of the retry here,
+      // feel free to replace with what you prefer.
+      // Store the latest invoice ID and status.
+      localStorage.setItem('latestInvoiceId', subscription.latest_invoice.id);
+      localStorage.setItem(
+        'latestInvoicePaymentIntentStatus',
+        subscription.latest_invoice.payment_intent.status
+      );
+      // eslint-disable-next-line no-throw-literal
+      throw { error: { message: 'Your card was declined.' } };
+    } else {
+      return { subscription, priceId, paymentMethodId };
+    }
+  }
 
   const handleSubmit = async () => {
     if (!stripe || !elements) {
@@ -38,14 +151,7 @@ function App() {
 
     setLoading(true)
 
-    // setCreditCardLoading(true)
-
-    // if (session.loggedIn) {
     const customer = await post('/create-customer', { email })
-
-    // Get a reference to a mounted CardElement. Elements knows how
-    // to find your CardElement because there can only ever be one of
-    // each type of element.
     const cardElement = elements.getElement(CardNumberElement)
 
     // // If a previous payment was attempted, get the latest invoice
@@ -61,15 +167,19 @@ function App() {
     if (error) {
       console.log('[createPaymentMethod error]', error)
     } else {
-      const subscriptionData = await post('/create-subscription', {
+      const subscription = await post('/create-subscription', {
         customerId: customer.id,
         paymentMethodId: paymentMethod.id,
         priceId: selectedPriceId
       })
 
-      console.log({ subscriptionData })
-
       setLoading(false)
+
+      await handlePaymentThatRequiresCustomerAction({
+        subscription: subscription,
+        priceId: selectedPriceId,
+        paymentMethodId: paymentMethod.id,
+      }).then(handleRequiresPaymentMethod)
 
       toast({
         title: "Purchase successful!",
@@ -194,9 +304,10 @@ function App() {
       <br />
       <br />
 
-      <div>
-        ...put Pay Now button here...
-      </div>
+
+      {paymentRequest &&
+        <PaymentRequestButtonElement options={{ paymentRequest }} />
+      }
     </div>
   );
 }
