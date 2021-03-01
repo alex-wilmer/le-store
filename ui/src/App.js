@@ -16,15 +16,60 @@ function App() {
   let [prices, setPrices] = useState([])
   let [selectedPriceId, setSelectedPriceId] = useState()
   let [loading, setLoading] = useState(false)
+  let [paymentRequest, setPaymentRequest] = useState(null);
 
-  const stripe = useStripe()
-  const elements = useElements()
-  const toast = useToast()
+  let stripe = useStripe()
+  let elements = useElements()
+  let toast = useToast()
 
-  const [paymentRequest, setPaymentRequest] = useState(null);
 
   useEffect(() => {
     if (stripe) {
+      async function handlePaymentMethodReceived(event) {
+        // Send the payment details to our function.
+        const paymentDetails = {
+          payment_method: event.paymentMethod.id,
+          shipping: {
+            name: event.shippingAddress.recipient,
+            phone: event.shippingAddress.phone,
+            address: {
+              line1: event.shippingAddress.addressLine[0],
+              city: event.shippingAddress.city,
+              postal_code: event.shippingAddress.postalCode,
+              state: event.shippingAddress.region,
+              country: event.shippingAddress.country,
+            },
+          },
+        };
+        const response = await post('/create-payment-intent', {
+          paymentDetails,
+        })
+        if (response.error) {
+          // Report to the browser that the payment failed.
+          console.log(response.error);
+          event.complete('fail');
+        } else {
+          // Report to the browser that the confirmation was successful, prompting
+          // it to close the browser payment method collection interface.
+          event.complete('success');
+          // Let Stripe.js handle the rest of the payment flow, including 3D Secure if needed.
+          const { error, paymentIntent } = await stripe.confirmCardPayment(
+            response.paymentIntent.client_secret
+          );
+          if (error) {
+            console.log(error);
+            return;
+          }
+          if (paymentIntent.status === 'succeeded') {
+            // history.push('/success');
+          } else {
+            console.warn(
+              `Unexpected status: ${paymentIntent.status} for ${paymentIntent}`
+            );
+          }
+        }
+      }
+
       const pr = stripe.paymentRequest({
         country: 'US',
         currency: 'usd',
@@ -48,9 +93,7 @@ function App() {
       // Check the availability of the Payment Request API first.
       pr.canMakePayment().then((result) => {
         if (result) {
-          pr.on('paymentmethod', () => {
-            //
-          });
+          pr.on('paymentmethod', handlePaymentMethodReceived);
           setPaymentRequest(pr);
         }
       });
