@@ -31,7 +31,7 @@ function App() {
   const toast = useToast()
 
   useEffect(() => {
-    post('/test', { foo: 123 }).then(d => {
+    post('/test-foo', { foo: 123 }).then(d => {
       console.log('data: ', d)
     })
 
