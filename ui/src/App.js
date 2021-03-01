@@ -8,16 +8,7 @@ import {
   // PaymentRequestButtonElement,
 } from '@stripe/react-stripe-js'
 import { Box, Heading, Button, Input, Text, Spinner, useToast } from "@chakra-ui/react"
-
-let api = process.env.REACT_APP_API || 'http://localhost:5555'
-let get = endpoint => fetch(api + endpoint).then(r => r.json())
-let post = (endpoint, body) => fetch(api + endpoint, {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify(body)
-}).then(r => r.json())
+import { get, post } from './api'
 
 function App() {
   let [email, setEmail] = useState('')
@@ -31,10 +22,6 @@ function App() {
   const toast = useToast()
 
   useEffect(() => {
-    post('/test-foo', { foo: 123 }).then(d => {
-      console.log('data: ', d)
-    })
-
     Promise.all([get('/products'), get('/prices')])
       .then(([products, prices]) => {
         setProducts(products.data)
