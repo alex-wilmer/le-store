@@ -32,7 +32,6 @@ function App() {
   let elements = useElements()
   let toast = useToast()
 
-
   useEffect(() => {
     if (stripe) {
       async function handlePaymentMethodReceived(event) {
@@ -308,6 +307,16 @@ function App() {
 
       <br />
 
+      <Flex alignItems="center">
+        <Divider />
+        <Text mx="2rem" width="40rem" fontWeight="bold" fontSize="12px">
+          USE CREDIT CARD FORM
+        </Text>
+        <Divider />
+      </Flex>
+
+      <br />
+
       <div>
         <Text mb="8px">Email</Text>
         <Input
@@ -351,7 +360,7 @@ function App() {
       <Button
         onClick={handleSubmit}
       >
-        {loading ? <Spinner /> : 'Pay With Credit Card'}
+        {loading ? <Spinner /> : 'Submit'}
       </Button>
 
       <br />
