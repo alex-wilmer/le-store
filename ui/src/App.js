@@ -31,6 +31,10 @@ function App() {
   const toast = useToast()
 
   useEffect(() => {
+    post('/test', { foo: 123 }).then(d => {
+      console.log('data: ', d)
+    })
+
     Promise.all([get('/products'), get('/prices')])
       .then(([products, prices]) => {
         setProducts(products.data)
