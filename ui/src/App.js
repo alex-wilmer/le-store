@@ -361,11 +361,12 @@ function App() {
         <Box>
           <Flex alignItems="center">
             <Divider />
-            <Text mx="2rem" width="65rem" fontWeight="bold" fontSize="12px">
+            <Text mx="2rem" width="15rem" fontWeight="bold" fontSize="12px">
               OR PAY WITH
               </Text>
             <Divider />
           </Flex>
+          <br />
           <PaymentRequestButtonElement options={{ paymentRequest }} />
         </Box>
       }
