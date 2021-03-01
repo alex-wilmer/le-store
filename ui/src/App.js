@@ -7,7 +7,17 @@ import {
   CardCvcElement,
   PaymentRequestButtonElement,
 } from '@stripe/react-stripe-js'
-import { Box, Heading, Button, Input, Text, Spinner, useToast } from "@chakra-ui/react"
+import {
+  Divider,
+  Box,
+  Flex,
+  Heading,
+  Button,
+  Input,
+  Text,
+  Spinner,
+  useToast
+} from "@chakra-ui/react"
 import { get, post } from './api'
 
 function App() {
@@ -269,7 +279,7 @@ function App() {
   }
 
   return (
-    <div>
+    <Box maxWidth="30rem">
       <Heading>Le Store</Heading>
 
       <div>
@@ -341,17 +351,25 @@ function App() {
       <Button
         onClick={handleSubmit}
       >
-        {loading ? <Spinner /> : 'Continue'}
+        {loading ? <Spinner /> : 'Pay With Credit Card'}
       </Button>
 
       <br />
       <br />
 
-
       {paymentRequest &&
-        <PaymentRequestButtonElement options={{ paymentRequest }} />
+        <Box>
+          <Flex alignItems="center">
+            <Divider />
+            <Text mx="2rem" width="65rem" fontWeight="bold" fontSize="12px">
+              OR PAY WITH
+              </Text>
+            <Divider />
+          </Flex>
+          <PaymentRequestButtonElement options={{ paymentRequest }} />
+        </Box>
       }
-    </div>
+    </Box>
   );
 }
 
