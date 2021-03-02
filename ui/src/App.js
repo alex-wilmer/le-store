@@ -50,9 +50,10 @@ function App() {
     if (stripe) {
       async function handlePaymentMethodReceived(event) {
         // Send the payment details to our function.
-        // todo, pass price ID here as well?
         const response = await post('/create-payment-intent', {
-          payment_method: event.paymentMethod.id,
+          paymentDetails: {
+            payment_method: event.paymentMethod.id,
+          },
         })
         if (response.error) {
           // Report to the browser that the payment failed.
@@ -207,7 +208,7 @@ function App() {
   //     isRetry: true,
   //   })
 
-  //   showSuccessToast()
+  //   // handle subscription finished 
   // }
 
   const handleSubmit = async () => {
