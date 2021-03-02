@@ -1,4 +1,8 @@
-import { useState, useEffect } from 'react'
+// https://stripe.com/docs/billing/subscriptions/overview
+// https://www.netlify.com/tags/stripe/
+// https://github.com/stripe-samples/react-elements-card-payment/blob/master/client/src/components/CheckoutForm.js
+
+import { useState, useEffect, useCallback } from 'react'
 import {
   useElements,
   useStripe,
@@ -32,26 +36,23 @@ function App() {
   let elements = useElements()
   let toast = useToast()
 
+  const showSuccessToast = useCallback(() => {
+    toast({
+      title: "Purchase successful!",
+      description: "We've created your account for you.",
+      status: "success",
+      duration: 9000,
+      isClosable: true,
+    })
+  }, [toast])
+
   useEffect(() => {
     if (stripe) {
       async function handlePaymentMethodReceived(event) {
         // Send the payment details to our function.
-        const paymentDetails = {
-          payment_method: event.paymentMethod.id,
-          shipping: {
-            name: event.shippingAddress.recipient,
-            phone: event.shippingAddress.phone,
-            address: {
-              line1: event.shippingAddress.addressLine[0],
-              city: event.shippingAddress.city,
-              postal_code: event.shippingAddress.postalCode,
-              state: event.shippingAddress.region,
-              country: event.shippingAddress.country,
-            },
-          },
-        };
+        // todo, pass price ID here as well?
         const response = await post('/create-payment-intent', {
-          paymentDetails,
+          payment_method: event.paymentMethod.id,
         })
         if (response.error) {
           // Report to the browser that the payment failed.
@@ -70,7 +71,7 @@ function App() {
             return;
           }
           if (paymentIntent.status === 'succeeded') {
-            // history.push('/success');
+            showSuccessToast()
           } else {
             console.warn(
               `Unexpected status: ${paymentIntent.status} for ${paymentIntent}`
@@ -86,17 +87,8 @@ function App() {
           label: 'Demo total',
           amount: 1350,
         },
-        requestPayerName: true,
-        requestPayerEmail: true,
-        requestShipping: true,
-        shippingOptions: [
-          {
-            id: 'standard-global',
-            label: 'Global shipping',
-            detail: 'Arrives in 5 to 7 days',
-            amount: 350,
-          },
-        ],
+        // requestPayerName: true,
+        // requestPayerEmail: true,
       });
 
       // Check the availability of the Payment Request API first.
@@ -107,7 +99,7 @@ function App() {
         }
       });
     }
-  }, [stripe])
+  }, [stripe, showSuccessToast])
 
   useEffect(() => {
     Promise.all([get('/products'), get('/prices')])
@@ -196,6 +188,28 @@ function App() {
     }
   }
 
+  // async function retryInvoiceWithNewPaymentMethod({
+  //   customerId,
+  //   paymentMethodId,
+  //   invoiceId,
+  //   priceId
+  // }) {
+  //   const response = await post('/retry-invoice', {
+  //     customerId: customerId,
+  //     paymentMethodId: paymentMethodId,
+  //     invoiceId: invoiceId,
+  //   })
+
+  //   await handlePaymentThatRequiresCustomerAction({
+  //     invoice: response,
+  //     paymentMethodId: paymentMethodId,
+  //     priceId: priceId,
+  //     isRetry: true,
+  //   })
+
+  //   showSuccessToast()
+  // }
+
   const handleSubmit = async () => {
     if (!stripe || !elements) {
       return
@@ -206,10 +220,21 @@ function App() {
     const customer = await post('/create-customer', { email })
     const cardElement = elements.getElement(CardNumberElement)
 
-    // // If a previous payment was attempted, get the latest invoice
-    // const latestInvoicePaymentIntentStatus = localStorage.getItem(
-    //   'latestInvoicePaymentIntentStatus',
-    // )
+    // If a previous payment was attempted, get the latest invoice
+    const latestInvoicePaymentIntentStatus = localStorage.getItem(
+      'latestInvoicePaymentIntentStatus',
+    )
+
+    if (latestInvoicePaymentIntentStatus === 'requires_payment_method') {
+      // Update the payment method and retry invoice payment
+      // const invoiceId = localStorage.getItem('latestInvoiceId')
+      // await retryInvoiceWithNewPaymentMethod({
+      //   customerId,
+      //   paymentMethodId,
+      //   invoiceId,
+      //   priceId,
+      // });
+    }
 
     const { error, paymentMethod } = await stripe.createPaymentMethod({
       type: 'card',
@@ -233,48 +258,8 @@ function App() {
         paymentMethodId: paymentMethod.id,
       }).then(handleRequiresPaymentMethod)
 
-      toast({
-        title: "Purchase successful!",
-        description: "We've created your account for you.",
-        status: "success",
-        duration: 9000,
-        isClosable: true,
-      })
+      showSuccessToast()
     }
-    //   // console.log({ paymentMethod })
-    //   const paymentMethodId = paymentMethod.id
-
-    //   if (latestInvoicePaymentIntentStatus === 'requires_payment_method') {
-    //     // Update the payment method and retry invoice payment
-    //     // const invoiceId = localStorage.getItem('latestInvoiceId')
-    //     // retryInvoiceWithNewPaymentMethod({
-    //     //   customerId,
-    //     //   paymentMethodId,
-    //     //   invoiceId,
-    //     //   priceId,
-    //     // });
-    //   } else {
-    //     // Create the subscription
-    //     try {
-    //       const subscriptionData = await createStripeSubscription({
-    //         customerId: createCustomerData.body.customer,
-    //         paymentMethodId,
-    //         priceId: selectedPrice.stripe_id,
-    //       })
-
-    //       if (!subscriptionData.success) {
-    //       }
-
-    //       navigate(
-    //         `/control-panel/account${session.resolver?.status ? '' : '?helpPane=platform'
-    //         }`,
-    //       )
-    //     } catch (err) {
-    //       setCreditCardLoading(false)
-    //       setSubError(err)
-    //     }
-    //   }
-    // }
   }
 
   return (
@@ -330,36 +315,29 @@ function App() {
 
       <Box border="1px solid #ddd" borderRadius="8px" p="12px">
         <Text mb="8px">Credit Card Number</Text>
-        <div className="card-input">
+        <div>
           <CardNumberElement />
         </div>
         <br />
-        <div
-          className="stripe-row"
-          style={{
-            display: 'flex',
-          }}
-        >
-          <div style={{ paddingRight: 20 }}>
+        <Flex>
+          <Box pr="20px">
             <Text mb="8px">Expiry Date</Text>
-            <div className="card-input">
+            <div>
               <CardExpiryElement />
             </div>
-          </div>
+          </Box>
           <div>
             <Text mb="8px">CVC</Text>
-            <div className="card-input">
+            <div>
               <CardCvcElement />
             </div>
           </div>
-        </div>
+        </Flex>
       </Box>
 
       <br />
 
-      <Button
-        onClick={handleSubmit}
-      >
+      <Button onClick={handleSubmit}>
         {loading ? <Spinner /> : 'Submit'}
       </Button>
 
