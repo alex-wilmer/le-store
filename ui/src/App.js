@@ -7,8 +7,6 @@ import {
   useElements,
   useStripe,
   CardNumberElement,
-  CardExpiryElement,
-  CardCvcElement,
   PaymentRequestButtonElement,
 } from '@stripe/react-stripe-js'
 import {
@@ -16,25 +14,25 @@ import {
   Box,
   Flex,
   Heading,
-  Button,
-  Input,
   Text,
-  Spinner,
   useToast
 } from "@chakra-ui/react"
 import { get, post } from './api'
+import usePaymentRequest from './usePaymentRequest'
+import CreditCardForm from './CreditCardForm'
 
 function App() {
-  let [email, setEmail] = useState('')
-  let [products, setProducts] = useState([])
-  let [prices, setPrices] = useState([])
-  let [selectedPriceId, setSelectedPriceId] = useState()
-  let [loading, setLoading] = useState(false)
-  let [paymentRequest, setPaymentRequest] = useState(null);
+  const [email, setEmail] = useState('')
+  const [products, setProducts] = useState([])
+  const [prices, setPrices] = useState([])
+  const [selectedPriceId, setSelectedPriceId] = useState()
+  const [processing, setProcessing] = useState(false)
+  const [success, setSuccess] = useState(false)
 
-  let stripe = useStripe()
-  let elements = useElements()
-  let toast = useToast()
+  const stripe = useStripe()
+  const elements = useElements()
+  const toast = useToast()
+  const paymentRequest = usePaymentRequest()
 
   const showSuccessToast = useCallback(() => {
     toast({
@@ -47,62 +45,6 @@ function App() {
   }, [toast])
 
   useEffect(() => {
-    if (stripe) {
-      async function handlePaymentMethodReceived(event) {
-        // Send the payment details to our function.
-        const response = await post('/create-payment-intent', {
-          paymentDetails: {
-            payment_method: event.paymentMethod.id,
-          },
-        })
-        if (response.error) {
-          // Report to the browser that the payment failed.
-          console.log(response.error);
-          event.complete('fail');
-        } else {
-          // Report to the browser that the confirmation was successful, prompting
-          // it to close the browser payment method collection interface.
-          event.complete('success');
-          // Let Stripe.js handle the rest of the payment flow, including 3D Secure if needed.
-          const { error, paymentIntent } = await stripe.confirmCardPayment(
-            response.paymentIntent.client_secret
-          );
-          if (error) {
-            console.log(error);
-            return;
-          }
-          if (paymentIntent.status === 'succeeded') {
-            showSuccessToast()
-          } else {
-            console.warn(
-              `Unexpected status: ${paymentIntent.status} for ${paymentIntent}`
-            );
-          }
-        }
-      }
-
-      const pr = stripe.paymentRequest({
-        country: 'US',
-        currency: 'usd',
-        total: {
-          label: 'Demo total',
-          amount: 1350,
-        },
-        // requestPayerName: true,
-        // requestPayerEmail: true,
-      });
-
-      // Check the availability of the Payment Request API first.
-      pr.canMakePayment().then((result) => {
-        if (result) {
-          pr.on('paymentmethod', handlePaymentMethodReceived);
-          setPaymentRequest(pr);
-        }
-      });
-    }
-  }, [stripe, showSuccessToast])
-
-  useEffect(() => {
     Promise.all([get('/products'), get('/prices')])
       .then(([products, prices]) => {
         setProducts(products.data)
@@ -111,7 +53,7 @@ function App() {
       })
   }, [])
 
-  function handlePaymentThatRequiresCustomerAction({
+  async function handlePaymentThatRequiresCustomerAction({
     subscription,
     invoice,
     priceId,
@@ -189,38 +131,40 @@ function App() {
     }
   }
 
-  // async function retryInvoiceWithNewPaymentMethod({
-  //   customerId,
-  //   paymentMethodId,
-  //   invoiceId,
-  //   priceId
-  // }) {
-  //   const response = await post('/retry-invoice', {
-  //     customerId: customerId,
-  //     paymentMethodId: paymentMethodId,
-  //     invoiceId: invoiceId,
-  //   })
+  // eslint-disable-next-line no-unused-vars
+  async function retryInvoiceWithNewPaymentMethod({
+    customerId,
+    paymentMethodId,
+    invoiceId,
+    priceId
+  }) {
+    const response = await post('/retry-invoice', {
+      customerId: customerId,
+      paymentMethodId: paymentMethodId,
+      invoiceId: invoiceId,
+    })
 
-  //   await handlePaymentThatRequiresCustomerAction({
-  //     invoice: response,
-  //     paymentMethodId: paymentMethodId,
-  //     priceId: priceId,
-  //     isRetry: true,
-  //   })
+    await handlePaymentThatRequiresCustomerAction({
+      invoice: response,
+      paymentMethodId: paymentMethodId,
+      priceId: priceId,
+      isRetry: true,
+    })
 
-  //   // handle subscription finished 
-  // }
+    showSuccessToast()
+  }
 
-  const handleSubmit = async () => {
+  async function processOrder() {
     if (!stripe || !elements) {
       return
     }
 
-    setLoading(true)
+    setProcessing(true)
 
     const customer = await post('/create-customer', { email })
     const cardElement = elements.getElement(CardNumberElement)
 
+    // TODO: handle retry logic
     // If a previous payment was attempted, get the latest invoice
     const latestInvoicePaymentIntentStatus = localStorage.getItem(
       'latestInvoicePaymentIntentStatus',
@@ -243,7 +187,7 @@ function App() {
     })
 
     if (error) {
-      console.log('[createPaymentMethod error]', error)
+      console.log('[createPaymentMethod error]', error?.message)
     } else {
       const subscription = await post('/create-subscription', {
         customerId: customer.id,
@@ -251,14 +195,14 @@ function App() {
         priceId: selectedPriceId
       })
 
-      setLoading(false)
-
       await handlePaymentThatRequiresCustomerAction({
         subscription: subscription,
         priceId: selectedPriceId,
         paymentMethodId: paymentMethod.id,
       }).then(handleRequiresPaymentMethod)
 
+      setProcessing(false)
+      setSuccess(true)
       showSuccessToast()
     }
   }
@@ -273,7 +217,10 @@ function App() {
         </Heading>
         {products.map(product =>
           <div key={product.id}>
-            <h3>{product.name}: <em>{product.description}</em></h3>
+            <h3>
+              <Text data-test="product-name">
+                {product.name}
+              </Text>: <em>{product.description}</em></h3>
             <div onChange={e => {
               setSelectedPriceId(e.target.value)
             }}>
@@ -303,44 +250,12 @@ function App() {
 
       <br />
 
-      <div>
-        <Text mb="8px">Email</Text>
-        <Input
-          placeholder="Enter email address.."
-          onChange={e => setEmail(e.target.value)}
-          value={email}
-        />
-      </div>
-
-      <br />
-
-      <Box border="1px solid #ddd" borderRadius="8px" p="12px">
-        <Text mb="8px">Credit Card Number</Text>
-        <div>
-          <CardNumberElement />
-        </div>
-        <br />
-        <Flex>
-          <Box pr="20px">
-            <Text mb="8px">Expiry Date</Text>
-            <div>
-              <CardExpiryElement />
-            </div>
-          </Box>
-          <div>
-            <Text mb="8px">CVC</Text>
-            <div>
-              <CardCvcElement />
-            </div>
-          </div>
-        </Flex>
-      </Box>
-
-      <br />
-
-      <Button onClick={handleSubmit}>
-        {loading ? <Spinner /> : 'Submit'}
-      </Button>
+      <CreditCardForm
+        processing={processing}
+        email={email}
+        setEmail={setEmail}
+        handleSubmit={processOrder}
+      />
 
       <br />
       <br />
@@ -358,6 +273,8 @@ function App() {
           <PaymentRequestButtonElement options={{ paymentRequest }} />
         </Box>
       }
+
+      {success && <div id="success">Success!</div>}
     </Box>
   );
 }
