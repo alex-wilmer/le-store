@@ -47,7 +47,6 @@ beforeAll(async () => {
 })
 
 test('should display the product', async () => {
-  await page.screenshot({ path: `output.png` })
   const content = await page.textContent('[data-test=product-name]:first-child')
   expect(content).toBe('Basic')
 })
